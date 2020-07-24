@@ -4,6 +4,8 @@ const webpack = require("webpack");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const TerserWebpackPlugin = require("terser-webpack-plugin");
 const OptimizeCssAssetsPlugin = require("optimize-css-assets-webpack-plugin");
+const ForkTsCheckerWebpackPlugin = require("fork-ts-checker-webpack-plugin");
+const WorkboxPlugin = require("workbox-webpack-plugin");
 
 module.exports = function(_env, argv) {
   const isProduction = argv.mode === "production";
@@ -11,7 +13,7 @@ module.exports = function(_env, argv) {
 
   return {
     devtool: isDevelopment && "cheap-module-source-map",
-    entry: "./src/index.js",
+    entry: "./src/index.tsx",
     output: {
       path: path.resolve(__dirname, "dist"),
       filename: "assets/js/[name].[contenthash:8].js",
@@ -20,7 +22,7 @@ module.exports = function(_env, argv) {
     module: {
       rules:[
         {
-          test: /\.jsx?$/,
+          test: /\.(js|jsx|ts|tsx)$/,
           exclude: /node_modules/,
           use: {
             loader: "babel-loader",
@@ -32,10 +34,48 @@ module.exports = function(_env, argv) {
           }
         },
         {
+          test: /\.worker\.js$/,
+          loader: "worker-loader"
+        },
+        {
           test: /\.css$/,
           use: [
             isProduction ? MiniCssExtractPlugin.loader : "style-loader",
             "css-loader"
+          ]
+        },
+        //With this rule, any file ending in .module.css will be processed with CSS Modules enabled
+        {
+          test: /\.module.css$/,
+          use: [
+            isProduction ? MiniCssExtractPlugin.loader : "style-loader",
+            {
+              loader: "css-loader",
+              options: {
+                modules: true,
+                importLoaders: 1
+              }
+            },
+            "postcss-loader"
+          ]
+        },
+        {
+          test: /\.s[ac]ss$/,
+          use: [
+            isProduction ? MiniCssExtractPlugin.loader : "style-loader",
+            {
+              loader: "css-loader",
+              options: {
+                importLoaders: 2
+              }
+            },
+            "resolve-url-loader",
+            {
+              loader: "sass-loader",
+              options: {
+                sourceMap: true
+              }
+            }
           ]
         },
         {
@@ -58,11 +98,12 @@ module.exports = function(_env, argv) {
           options: {
             name: "static/media/[name].[hash:8].[ext]"
           }
-        }
+        },
+        
       ]
     },
     resolve: {
-      extensions: [".js", ".jsx"]
+      extensions: [".js", ".jsx", ".ts", ".tsx"]
      },
     plugins: [
       isProduction &&
@@ -78,6 +119,14 @@ module.exports = function(_env, argv) {
       new HtmlWebpackPlugin({
         template: path.resolve(__dirname, "public/index.html"),
         inject: true
+      }),
+      new ForkTsCheckerWebpackPlugin({
+        async: false
+      }),
+      new WorkboxPlugin.GenerateSW({
+        swDest: "service-worker.js",
+        clientsClaim: true,
+        skipWaiting: true
       })
     ].filter(Boolean),
     optimization: {
